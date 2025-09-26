@@ -25,7 +25,7 @@ jobs:
         package: '.'
 
     # Import API into APIM using local OpenAPI file
-        - name: Import API into APIM
+    - name: Import API into APIM
       run: |
         echo "Importing API into APIM from local file..."
 
