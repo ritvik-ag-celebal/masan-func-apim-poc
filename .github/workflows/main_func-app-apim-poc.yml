@@ -1,5 +1,4 @@
 name: Deploy Function App and Update APIM
-
 on:
   push:
     branches:
@@ -8,7 +7,6 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
@@ -23,22 +21,108 @@ jobs:
     - name: Deploy to Azure Function App
       uses: azure/functions-action@v1
       with:
-        app-name: func-app-apim-poc
+        app-name: ${{ secrets.AZURE_FUNCTIONAPP_NAME }}  # Use consistent naming
         package: '.'
+
+    # Wait for deployment to complete and app to be ready
+    - name: Wait for Function App to be ready
+      run: |
+        echo "Waiting for Function App to be ready..."
+        sleep 60
+        
+        # Check if the Function App is accessible
+        max_attempts=10
+        attempt=1
+        
+        while [ $attempt -le $max_attempts ]; do
+          echo "Attempt $attempt: Checking Function App status..."
+          
+          if curl -s -f "https://${{ secrets.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net" > /dev/null; then
+            echo "Function App is accessible"
+            break
+          fi
+          
+          if [ $attempt -eq $max_attempts ]; then
+            echo "Function App is not accessible after $max_attempts attempts"
+            exit 1
+          fi
+          
+          echo "Function App not ready, waiting 30 seconds..."
+          sleep 30
+          attempt=$((attempt + 1))
+        done
 
     # Fetch Function Host Key
     - name: Get Function Host Key
       id: getkey
       run: |
+        echo "Fetching Function App host key..."
         key=$(az functionapp keys list \
           --name ${{ secrets.AZURE_FUNCTIONAPP_NAME }} \
           --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
           --query "functionKeys.default" -o tsv)
+        
+        if [ -z "$key" ] || [ "$key" = "null" ]; then
+          echo "Failed to retrieve host key"
+          exit 1
+        fi
+        
+        echo "Host key retrieved successfully"
         echo "hostkey=$key" >> $GITHUB_OUTPUT
+
+    # Verify swagger.json is accessible before importing
+    - name: Verify Swagger Endpoint
+      run: |
+        swagger_url="https://${{ secrets.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net/api/swagger.json?code=${{ steps.getkey.outputs.hostkey }}"
+        echo "Verifying swagger endpoint: $swagger_url"
+        
+        max_attempts=5
+        attempt=1
+        
+        while [ $attempt -le $max_attempts ]; do
+          echo "Attempt $attempt: Checking swagger endpoint..."
+          
+          if curl -s -f "$swagger_url" > /dev/null; then
+            echo "Swagger endpoint is accessible"
+            break
+          fi
+          
+          if [ $attempt -eq $max_attempts ]; then
+            echo "Swagger endpoint is not accessible after $max_attempts attempts"
+            echo "Please check if your Function App has OpenAPI/Swagger configured"
+            exit 1
+          fi
+          
+          echo "Swagger endpoint not ready, waiting 20 seconds..."
+          sleep 20
+          attempt=$((attempt + 1))
+        done
 
     # Import API into APIM
     - name: Import API into APIM
       run: |
+        echo "Importing API into APIM..."
+        swagger_url="https://${{ secrets.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net/api/swagger.json?code=${{ steps.getkey.outputs.hostkey }}"
+        
+        # First check if API already exists and delete it if needed
+        existing_api=$(az apim api show \
+          --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+          --service-name ${{ secrets.AZURE_APIM_NAME }} \
+          --api-id function-api \
+          --query "name" -o tsv 2>/dev/null || echo "")
+        
+        if [ ! -z "$existing_api" ]; then
+          echo "API already exists, deleting it first..."
+          az apim api delete \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --service-name ${{ secrets.AZURE_APIM_NAME }} \
+            --api-id function-api \
+            --delete-revisions true \
+            --yes
+          echo "Existing API deleted"
+        fi
+        
+        # Import the API
         az apim api import \
           --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
           --service-name ${{ secrets.AZURE_APIM_NAME }} \
@@ -46,4 +130,35 @@ jobs:
           --api-id function-api \
           --display-name "Function API" \
           --specification-format OpenApi \
-          --specification-url "https://${{ secrets.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net/api/swagger.json?code=${{ steps.getkey.outputs.hostkey }}"
+          --specification-url "$swagger_url"
+        
+        echo "API imported successfully"
+
+    # Optional: Set up API policies
+    - name: Configure API Policies (Optional)
+      run: |
+        echo "Configuring basic API policies..."
+        
+        # Example: Set rate limiting policy
+        policy_xml='<policies>
+          <inbound>
+            <rate-limit calls="100" renewal-period="60" />
+            <base />
+          </inbound>
+          <backend>
+            <base />
+          </backend>
+          <outbound>
+            <base />
+          </outbound>
+          <on-error>
+            <base />
+          </on-error>
+        </policies>'
+        
+        az apim api policy set \
+          --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+          --service-name ${{ secrets.AZURE_APIM_NAME }} \
+          --api-id function-api \
+          --policy-format xml \
+          --value "$policy_xml" || echo "Policy configuration skipped"
