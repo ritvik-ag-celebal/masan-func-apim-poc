@@ -1,0 +1,170 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "OMS Export Analysis API",
+    "description": "API for exporting OMS manufacturing analysis data",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://<your-function-app>.azurewebsites.net/api"
+    }
+  ],
+  "paths": {
+    "/oms-export": {
+      "post": {
+        "tags": ["OMS Export"],
+        "summary": "Export OMS analysis data",
+        "description": "Exports manufacturing analysis data from Databricks to Excel/CSV format and sends via email",
+        "operationId": "exportOmsData",
+        "security": [
+          {
+            "functionKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OMSExportRequest"
+              },
+              "example": {
+                "Year": 2025,
+                "Month": 9,
+                "Factory_Code": "FAC001",
+                "Pillar_Code": "QUA",
+                "Email": "bi-thailand@msc.masangroup.com",
+                "Type": "excel"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Export completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OMSExportResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing function key"
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "OMSExportRequest": {
+        "type": "object",
+        "required": ["Year", "Month", "Factory_Code"],
+        "properties": {
+          "Year": {
+            "type": "integer",
+            "minimum": 2020,
+            "maximum": 2030,
+            "description": "Export year"
+          },
+          "Month": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "description": "Export month"
+          },
+          "Factory_Code": {
+            "type": "string",
+            "description": "Factory identifier code",
+            "example": "FAC001"
+          },
+          "Pillar_Code": {
+            "type": "string",
+            "description": "Pillar code for analysis",
+            "example": "QUA"
+          },
+          "Email": {
+            "type": "string",
+            "format": "email",
+            "description": "Recipient email address"
+          },
+          "Type": {
+            "type": "string",
+            "enum": ["excel", "csv"],
+            "default": "excel",
+            "description": "Export file format"
+          }
+        }
+      },
+      "OMSExportResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "OMS data export completed successfully"
+          },
+          "export_type": {
+            "type": "string",
+            "example": "excel"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "records_processed": {
+            "type": "integer",
+            "example": 1250
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error message"
+          },
+          "details": {
+            "type": "string",
+            "description": "Additional error details"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "functionKey": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "code",
+        "description": "Azure Function authentication key"
+      }
+    }
+  }
+}
