@@ -25,7 +25,7 @@ jobs:
         package: '.'
 
     # Import API into APIM using local OpenAPI file
-    - name: Import API into APIM
+        - name: Import API into APIM
       run: |
         echo "Importing API into APIM from local file..."
 
@@ -47,7 +47,7 @@ jobs:
           echo "Existing API deleted"
         fi
 
-        # Import the new API from repo's file
+        # Import the new API from repo's local file
         az apim api import \
           --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
           --service-name ${{ secrets.AZURE_APIM_NAME }} \
@@ -55,6 +55,6 @@ jobs:
           --api-id oms-export-api \
           --display-name "OMS Export Analysis API" \
           --specification-format OpenApi \
-          --specification-file deploy/openapi.json
+          --specification-path deploy/openapi.json
 
         echo "API imported successfully into APIM"
