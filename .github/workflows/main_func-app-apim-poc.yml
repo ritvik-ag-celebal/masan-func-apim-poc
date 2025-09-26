@@ -1,28 +1,49 @@
-name: Deploy Azure Function App
+name: Deploy Function App and Update APIM
 
 on:
   push:
     branches:
-      - main   # Runs whenever code is pushed to main
+      - main
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout source code
-      - name: Checkout Code
-        uses: actions/checkout@v4
+    - name: Checkout Code
+      uses: actions/checkout@v4
 
-      # Authenticate to Azure using Service Principal
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+    # Authenticate with Azure
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Deploy to Function App
-      - name: Deploy to Azure Function App
-        uses: azure/functions-action@v1
-        with:
-          app-name: func-app-apim-poc
-          package: '.'
+    # Deploy Function App
+    - name: Deploy to Azure Function App
+      uses: azure/functions-action@v1
+      with:
+        app-name: func-app-apim-poc
+        package: '.'
+
+    # Fetch Function Host Key
+    - name: Get Function Host Key
+      id: getkey
+      run: |
+        key=$(az functionapp keys list \
+          --name ${{ secrets.AZURE_FUNCTIONAPP_NAME }} \
+          --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+          --query "functionKeys.default" -o tsv)
+        echo "hostkey=$key" >> $GITHUB_OUTPUT
+
+    # Import API into APIM
+    - name: Import API into APIM
+      run: |
+        az apim api import \
+          --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+          --service-name ${{ secrets.AZURE_APIM_NAME }} \
+          --path my-function-api \
+          --api-id function-api \
+          --display-name "Function API" \
+          --specification-format OpenApi \
+          --specification-url "https://${{ secrets.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net/api/swagger.json?code=${{ steps.getkey.outputs.hostkey }}"
