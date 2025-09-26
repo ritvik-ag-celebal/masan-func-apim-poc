@@ -2,18 +2,18 @@ name: Function App CI/CD → APIM import
 
 on:
   push:
-    # branches: [ main ]
+    branches: [ main ]
   workflow_dispatch:
 
 env:
   # These can reference secrets (preferred) or plain repo variables.
-  AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
-  AZURE_FUNCTIONAPP_NAME: ${{ secrets.AZURE_FUNCTIONAPP_NAME }}
-  AZURE_APIM_NAME: ${{ secrets.AZURE_APIM_NAME }}
-  API_ID: ${{ secrets.API_ID }}
-  API_PATH: ${{ secrets.API_PATH }}
-  API_DISPLAY_NAME: ${{ secrets.API_DISPLAY_NAME }}
-  SWAGGER_URL_PATH: ${{ secrets.SWAGGER_URL_PATH }}  # e.g. /api/swagger.json
+  AZURE_RESOURCE_GROUP: masan-rg
+  AZURE_FUNCTIONAPP_NAME: func-app-apim-poc
+  AZURE_APIM_NAME: func-apim-poc
+  # API_ID: ${{ secrets.API_ID }}
+  # API_PATH: ${{ secrets.API_PATH }}
+  # API_DISPLAY_NAME: ${{ secrets.API_DISPLAY_NAME }}
+  # SWAGGER_URL_PATH: ${{ secrets.SWAGGER_URL_PATH }}  # e.g. /api/swagger.json
 
 permissions:
   contents: read
